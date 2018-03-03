@@ -59,7 +59,10 @@ _start:
 		mov 	(%edi,%esi,1), %edi
 		add 	%edi, %eax
 		pop	%edi
-		rol 	%eax, %edi
+		push	%ecx
+		mov	%edi, %ecx
+		rol 	%cl, %eax
+		pop	%ecx
 
 		add	$1,%esi
 		add	$4,%edi
@@ -105,7 +108,10 @@ _start:
 	add	%edi,%eax
 	add	$0x5A827999,%eax
 	pop	%edi
-	rol	%eax, %edi
+	push	%ecx
+	mov	%edi, %ecx
+	rol	%cl, %eax
+	pop	%ecx
 
 	cmp	$3,%edi
 	jne	r2_s_add_4
@@ -158,8 +164,10 @@ _start:
 	add	%edi,%eax
 	add	$0x6ED9EBA1,%eax
 	pop	%edi
-	rol	%eax,%edi
-
+	push	%ecx
+	mov	%edi,%ecx
+	rol	%cl,%eax
+	pop	%ecx
 	
 	/* k (esi) pattern: add 8, sub 4, add 8, sub 10, add 8, sub 4, add 8, sub 13 */
 	/* s (edi) pattern: add 6, add 2, add 4, reset to 3*/
@@ -287,8 +295,8 @@ __F:
 	push	%ecx
 	push	%ebx
 	
-	and	%ebx, %ecx, %ecx
-	andn	%edx, %ebx, %edx
+	and	%ebx, %ecx
+	andn	%ebx, %edx, %edx
 
 	or	%edx, %ecx
 	mov	%edx, %eax
@@ -308,12 +316,18 @@ __G:
 	push	%ecx
 	push	%ebx
 
-	and	%eax, %ebx, %ecx
-	and	%ebx, %ebx, %edx
-	and	%ecx, %ecx, %edx
+	/* eax = X&Y */
+	mov	%ebx, %eax
+	and	%ecx, %eax
 
-	or	%eax, %eax, %ebx
-	or	%eax, %eax, %ecx
+	/* ebx = X&Z */
+	and	%edx, %ebx
+
+	/* ecx = Y&Z */
+	and	%edx, %ecx
+
+	or	%ebx, %eax
+	or	%ecx, %eax
 
 	pop	%ebx
 	pop	%ecx
@@ -326,9 +340,17 @@ H(X,Y,Z) = X ^ Y ^ Z
 */
 
 __H:
+	push 	%edx
+	push	%ecx
+	push	%ebx
 
-	xor	%eax, %ebx, %ecx
-	xor	%eax, %eax, %edx
+	xor	%ebx, %ecx
+	xor	%ecx, %edx
+	mov	%edx, %eax
+
+	pop	%ebx
+	pop	%ecx
+	pop	%edx
 	
 	ret
 
