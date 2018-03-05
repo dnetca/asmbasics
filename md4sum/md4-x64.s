@@ -13,6 +13,8 @@
 
 	*/
 
+/* this function seems to work as intended, but has not been tested 
+for a 2-block pad */
 __pad:
 	
 	shl 	$3,%r10
@@ -24,7 +26,7 @@ __pad:
 	cmp 	$56,%r10
 	jb	__pad_lt_64bytes
 
-	/* this flag means that there are 2 bufs left to digest */
+	/* this flag means that there are 2 blocks left to digest */
 	mov	$2,%r12
 
 	mov	$120,%r9
@@ -47,7 +49,6 @@ __pad:
 		inc	%r10
 		jmp	__pad_writezeroes
 
-	/* good enough */
 	__pad_second_chunk:
 		movq	$0,(%rdi)
 		movq	$0,8(%rdi)
@@ -58,7 +59,6 @@ __pad:
 		movq	$0,48(%rdi)
 		
 	__pad_complete:
-		/* endianness ?? */
 		mov	%r11,56(%rdi)
 		jmp	__md4_digest_round
 		
@@ -113,7 +113,8 @@ main:
 	If %r9 is 8, load a new chunk into the register
 	Otherwise, shift the buffer register right by 8 bits (next byte in register)
 	*/
-	
+
+/* this function seems to work as intended. data is loaded appropriately */	
   __loadbuf_new_chunk:
 	cmp	$8,%r10
 	je	__md4_digest_round
@@ -177,7 +178,8 @@ main:
 	mov $0,%r13
 	mov $3,%r14
 	
-
+/* TODO: Test this function's iterations.
+Each iteration works as intended, but does k and s increment properly? */
   __round_1:
 
 	/* a = a + F(b,c,d) */
@@ -198,7 +200,12 @@ main:
 	pop	%rcx
 
 	add	$1,%r13
-	add	$4,%r14
+	r1_s_add_8:
+	add	$4,%r14	
+
+	cmp	$15,%r14
+	je	r1_s_add_8
+	
 	cmp	$19,%r14
 	jbe	r1_no_s_reset
 	mov	$3,%r14
@@ -232,6 +239,7 @@ main:
 	mov 	$0,%r13
 	mov	$3,%r14
 
+/* TODO: Test this function */
   __round_2:
 	/* a = a + G(b,c,d) */
 	mov	%eax, %r15d
@@ -306,6 +314,7 @@ main:
 	mov	$0,%r13
 	mov	$3,%r14
 
+/* TODO: Test this function */
   __round_3:
 
 	/* a = a + H(b,c,d) */
@@ -334,6 +343,8 @@ main:
 	if s=15, then k-=(10 or 13) and s=3
 
 	1-4 cmps per round :(, TODO: optimize this part
+	will probably just turn round_3 into a function
+	and call it with hard-coded s and k
 	*/
 
 	cmp	$3, %r14
@@ -415,34 +426,32 @@ main:
 
 	__md4_process_failed:
 
-/* don't really have to repeat all this, but it's best practice */
-
 	mov	%rcx,%r10
-	mov	%rdx,%r11
+	push	%rdx
 	
 	mov	%rax,%r15
 	call	__reg_to_string
 	lea	regstr,%rsi
-	mov	$26,%rdx
+	mov	$14,%rdx
 	call	__printmsg
 
 
 	mov	%rbx,%r15
 	call	__reg_to_string
 	lea	regstr,%rsi
-	mov	$26,%rdx
+	mov	$14,%rdx
 	call	__printmsg
 
 	mov	%r10,%r15
 	call	__reg_to_string
 	lea	regstr,%rsi
-	mov	$26,%rdx
+	mov	$14,%rdx
 	call	__printmsg
 
-	mov	%r11,%r15
+	pop	%r15
 	call	__reg_to_string
 	lea	regstr,%rsi
-	mov	$26,%rdx
+	mov	$14,%rdx
 	call	__printmsg
 
 
@@ -461,6 +470,7 @@ main:
 
 	ret
 	
+/* function tested and works as expected */
   __rotate_reg:
 		
 	mov	%edx, %r15d
@@ -472,6 +482,8 @@ main:
 	ret
 
 /* load regstr with a hex string with the value in r15 */
+/* Function tested and working */
+
   __reg_to_string:
 	push	%r14
 	push	%r13
@@ -514,7 +526,7 @@ main:
 	add	$3,%r12
 	shr	$8,%r15
 
-	cmp	$24,%r12
+	cmp	$12,%r12
 	jb	__rts_process_byte
 
 	pop	%rdi
@@ -530,13 +542,14 @@ ecx = Y
 edx = Z
 eax = return value
 
-push rbx,rcx,rdx into stack so that the registers
-dont get clobbered
+pushes rbx,rcx,rdx onto stack so that the registers
+dont get clobbered.
 */
 
 
 /*
 F(X,Y,Z) = (X & Y) | (!X & Z)
+Function tested and returns expected values
 */
 
 __F:
@@ -545,19 +558,21 @@ __F:
 	push	%rbx
 	
 	and	%ebx, %ecx
-	andn	%ebx, %edx, %edx
+	andn	%edx, %ebx, %edx
 
 	or	%edx, %ecx
-	mov	%edx, %eax
+	mov	%ecx, %eax
 
 	pop	%rbx
 	pop	%rcx
 	pop	%rdx
+
 	ret
 
 
 /*
 G(X,Y,Z) = (X & Y) | (X & Z) | (Y & Z)
+Function tested and returns expected values
 */
 
 __G:
@@ -581,11 +596,13 @@ __G:
 	pop	%rbx
 	pop	%rcx
 	pop	%rdx
+
 	ret
 
 
 /*
 H(X,Y,Z) = X ^ Y ^ Z
+Function tested and returns expected values
 */
 
 __H:
@@ -607,17 +624,22 @@ __H:
 input:	.asciz 	"Hello world"
 pass:	.asciz	"MD4 sum passed!"
 fail:	.asciz	"MD4 sum failed."
+
+/* expected result... this may not be correct */
 resA:	.long	0x2f34e7ed
 resB:	.long	0xc8180b87
 resC:	.long	0x578159ff
 resD:	.long	0x58e87c1a
+
 wordA:	.long	0x01234567
 wordB:	.long	0x89abcdef
 wordC:	.long	0xfedcba98
 wordD:	.long	0x76543210
 
+	.data
+regstr:	.ascii	"            \n\0"
+
 	.bss
 buf:	.fill	64
-regstr:	.fill	24
-.byte 0x0a
+
 
